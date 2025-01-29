@@ -66,6 +66,43 @@ THE SOFTWARE.
 #define FDCAN2_TERM_EN_GPIO_Port	  GPIOB
 #define FDCAN2_TERM_EN_Pin		  GPIO_PIN_4
 
+HAL_StatusTypeDef ClearnBootSel(void)
+{
+	FLASH_OBProgramInitTypeDef OB;
+	HAL_FLASHEx_OBGetConfig(&OB);
+
+	/* OB.USERConfig returns the FLASH_OPTR register */
+	// Use it to check if OB programming is necessary
+	if (OB.USERConfig & FLASH_OPTR_nBOOT_SEL)
+	{
+
+		  HAL_FLASH_Unlock();
+		  HAL_FLASH_OB_Unlock();
+
+		  OB.OptionType = OPTIONBYTE_USER;
+		  OB.USERType = OB_USER_nBOOT_SEL;
+		  OB.USERConfig = OB_BOOT0_FROM_PIN;
+
+		  if ( HAL_FLASHEx_OBProgram(&OB) != HAL_OK )
+		  {
+			  HAL_FLASH_OB_Lock();
+			  HAL_FLASH_Lock();
+			  return HAL_ERROR;
+		  }
+
+		  HAL_FLASH_OB_Launch();
+
+		  /* We should not make it past the Launch, so lock
+		   * flash memory and return an error from function
+		   */
+		  HAL_FLASH_OB_Lock();
+		  HAL_FLASH_Lock();
+		  return HAL_ERROR;
+	}
+
+	return HAL_OK;
+}
+
 static void canis_setup(USBD_GS_CAN_HandleTypeDef *hcan)
 {
 	GPIO_InitTypeDef GPIO_InitStruct;
@@ -75,6 +112,9 @@ static void canis_setup(USBD_GS_CAN_HandleTypeDef *hcan)
 	__HAL_RCC_GPIOA_CLK_ENABLE();
 	__HAL_RCC_GPIOB_CLK_ENABLE();
 	__HAL_RCC_GPIOC_CLK_ENABLE();
+
+	/* Clear FLASH_OPTR_nBOOT_SEL to enable DFU via Pattern 11(see AN2606) after intial flashing*/
+	ClearnBootSel();
 
 	/* LEDs */
 
